@@ -1,0 +1,137 @@
+name: Flask CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: '3.11'
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: flask-practice
+  IMAGE_TAG: ${{ github.sha }}
+  EC2_HOST: ${{ secrets.EC2_HOST }}
+  EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
+  ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
+
+jobs:
+  test:
+    name: Run Flask Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest flake8
+
+      - name: Run tests
+        run: pytest -q
+
+  build-and-push:
+    name: Build and Push Docker Image to ECR
+    needs: test
+    runs-on: ubuntu-latest
+    if: success()
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build Docker image
+        run: |
+          docker build -t ${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }} .
+          docker tag ${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }} ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+
+      - name: Push Docker image to ECR
+        run: |
+          docker push ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+
+  deploy:
+    name: Deploy Flask App on EC2
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    if: success()
+
+    steps:
+      - name: Deploy to EC2 via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USERNAME }}
+          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          port: 22
+          script: |
+            set -e
+            aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin ${{ secrets.ECR_REGISTRY }}
+            docker pull ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+            docker stop flask-app || true
+            docker rm flask-app || true
+            docker run -d \
+              --name flask-app \
+              -p 80:5000 \
+              --restart unless-stopped \
+              -e FLASK_ENV=production \
+              ${{ secrets.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+
+  notify:
+    name: Send Email Notification
+    needs: [test, build-and-push, deploy]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Determine pipeline status
+        id: status
+        run: |
+          if [[ "${{ needs.test.result }}" == "success" && "${{ needs.build-and-push.result }}" == "success" && "${{ needs.deploy.result }}" == "success" ]]; then
+            echo "message=The Flask CI/CD pipeline succeeded. Application tests passed, Docker image was built and pushed to Amazon ECR, and the Flask container was deployed successfully on EC2." >> "$GITHUB_OUTPUT"
+            echo "status=SUCCESS" >> "$GITHUB_OUTPUT"
+          else
+            echo "message=The Flask CI/CD pipeline failed. Please review the workflow logs for details. Test status: ${{ needs.test.result }}, Build status: ${{ needs.build-and-push.result }}, Deploy status: ${{ needs.deploy.result }}." >> "$GITHUB_OUTPUT"
+            echo "status=FAILED" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Send email notification
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT }}
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: "Flask CI/CD Pipeline - ${{ steps.status.outputs.status }}"
+          to: ${{ secrets.NOTIFY_EMAIL }}
+          from: GitHub Actions <${{ secrets.SMTP_USERNAME }}>
+          body: |
+            Hello,
+
+            ${{ steps.status.outputs.message }}
+
+            Workflow: ${{ github.workflow }}
+            Commit: ${{ github.sha }}
+            Repository: ${{ github.repository }}
+            Ref: ${{ github.ref_name }}
+
+            Best regards,
+            GHA CI/CD Pipeline
