@@ -12,7 +12,7 @@ env:
   ECR_REPOSITORY: flashapp
   IMAGE_TAG: ${{ github.sha }}
   EC2_HOST: ${{ secrets.EC2_HOST }}
-  EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
+  EC2_USERNAME: ${{ secrets.EC2_USER }}
   ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
 
 jobs:
@@ -118,11 +118,11 @@ jobs:
         with:
           server_address: ${{ secrets.SMTP_SERVER }}
           server_port: ${{ secrets.SMTP_PORT }}
-          username: ${{ secrets.SMTP_USERNAME }}
-          password: ${{ secrets.SMTP_PASSWORD }}
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
           subject: "Flask CI/CD Pipeline - ${{ steps.status.outputs.status }}"
-          to: ${{ secrets.NOTIFY_EMAIL }}
-          from: GitHub Actions <${{ secrets.SMTP_USERNAME }}>
+          to: ${{ secrets.EMAIL_TO }}
+          from: GitHub Actions <${{ secrets.EMAIL_USERNAME }}>
           body: |
             Hello,
 
