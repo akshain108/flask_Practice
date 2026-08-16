@@ -8,8 +8,8 @@ on:
 
 env:
   PYTHON_VERSION: '3.11'
-  AWS_REGION: us-east-1
-  ECR_REPOSITORY: flask-practice
+  AWS_REGION: ap-south-1
+  ECR_REPOSITORY: flashapp
   IMAGE_TAG: ${{ github.sha }}
   EC2_HOST: ${{ secrets.EC2_HOST }}
   EC2_USERNAME: ${{ secrets.EC2_USERNAME }}
