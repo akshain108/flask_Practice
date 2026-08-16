@@ -9,8 +9,8 @@ import os
 load_dotenv()
 
 app = Flask(__name__)
-app.config["MONGO_URI"] = os.getenv("MONGO_URI") or "mongodb://localhost:27017/student_db"
-app.config["SECRET_KEY"] = os.getenv("SECRET_KEY") or "dev-secret-key"
+app.config["MONGO_URI"] = os.getenv("MONGO_URI")
+app.config["SECRET_KEY"] = os.getenv("SECRET_KEY")
 app.secret_key = app.config["SECRET_KEY"]
 
 # Use certifi CA bundle explicitly for cross-platform TLS reliability

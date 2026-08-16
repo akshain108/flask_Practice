@@ -8,7 +8,6 @@ on:
 
 env:
   PYTHON_VERSION: '3.11'
-  MONGO_URI: mongodb://localhost:27017/test_student_db
   SECRET_KEY: test-secret-key
   AWS_REGION: ap-south-1
   ECR_REPOSITORY: flashapp
