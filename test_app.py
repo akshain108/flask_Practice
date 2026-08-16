@@ -1,11 +1,24 @@
+import os
+
+import mongomock
 import pytest
-from app import app, mongo
 from bson.objectid import ObjectId
+
+os.environ.setdefault("MONGO_URI", "mongodb://localhost:27017/test_student_db")
+os.environ.setdefault("SECRET_KEY", "test-secret-key")
+
+from app import app, mongo
+
 
 @pytest.fixture
 def client():
     app.config["TESTING"] = True
     app.config["MONGO_URI"] = "mongodb://localhost:27017/test_student_db"  # test DB
+
+    mock_client = mongomock.MongoClient()
+    mongo.cx = mock_client
+    mongo.db = mock_client["test_student_db"]
+
     client = app.test_client()
 
     # Setup: clear and create test data

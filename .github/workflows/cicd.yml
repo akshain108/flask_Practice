@@ -8,6 +8,8 @@ on:
 
 env:
   PYTHON_VERSION: '3.11'
+  MONGO_URI: mongodb://localhost:27017/test_student_db
+  SECRET_KEY: test-secret-key
   AWS_REGION: ap-south-1
   ECR_REPOSITORY: flashapp
   IMAGE_TAG: ${{ github.sha }}
@@ -19,13 +21,18 @@ jobs:
   test:
     name: Run Flask Tests
     runs-on: ubuntu-latest
+    services:
+      mongo:
+        image: mongo:7
+        ports:
+          - 27017:27017
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -46,7 +53,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
